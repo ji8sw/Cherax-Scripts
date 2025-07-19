@@ -94,17 +94,17 @@ local Globals = {}
 if Cherax.GetEdition() == "EE" then -- Enhanced Globals
     Globals = 
     {
-        Position = 2652571 + 2706, -- Line 3962 (int func_14())
-        WeaponSlots = 262145 + 33775, -- Line 33556
-        WeaponDiscount = 262145 + 33786, -- Line 34648
-        ThrowableSlots = 262145 + 33295, -- Line 34662
+        Position = 2652587 + 2706, -- (int/hash func_14())
+        WeaponSlots = 262145 + 33774, -- (float func_210) (case 0: if (hParam0 == Global_)
+        WeaponDiscount = 262145 + 33785, -- Line 34648
+        ThrowableSlots = 262145 + 33796, -- (float func_210) (case 1: if (hParam0 == Global_)
         ThrowableDiscount = 262145 + 33299, -- Line 18117
         ArmourDiscount = 262145 + 33303 -- Line 34676
     }
 else -- Legacy Globals
     Globals = 
     {
-        Position = 2652568 + 2706, -- Line 3962 (int func_14())
+        Position = 2652584 + 2706, -- (int/hash func_14())
         WeaponSlots = 262145 + 33273, -- Line 33556
         WeaponDiscount = 262145 + 33284, -- Line 34648
         ThrowableSlots = 262145 + 33295, -- Line 34662
@@ -331,7 +331,6 @@ local function CreateMenu()
         ImGui.Text("2. Choose Weapon")
         ClickGUI.RenderFeature(Utils.Joaat("LUA_MODIFY_GUNVAN_SLOT"))
         ClickGUI.RenderFeature(Utils.Joaat("LUA_EXECUTE_MODIFY_GUNVAN_SLOT"))
-        ClickGUI.RenderFeature(Utils.Joaat("LUA_SETGUNVAN_SLOT"))
         ClickGUI.RenderFeature(Utils.Joaat("LUA_SET_TO_CURRENT_WEAPON"))
         ClickGUI.EndCustomChildWindow()
     end
