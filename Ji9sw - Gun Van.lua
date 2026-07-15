@@ -30,6 +30,25 @@ ScriptGlobal.StringToTunable = function(Name)
     return Global
 end
 
+-- columns based on the example Bravado provided
+local CurrentColumn = 0
+local function BeginColumn(Name, ColumnCount)
+    if ImGui.BeginTable(Name, ColumnCount, ImGuiTableFlags.SizingStretchSame) then
+        ImGui.TableNextRow()
+        CurrentColumn = 0
+        ImGui.TableSetColumnIndex(CurrentColumn)
+        return true
+    end
+    return false
+end
+local function NextColumn()
+    CurrentColumn = CurrentColumn + 1
+    ImGui.TableSetColumnIndex(CurrentColumn)
+end
+local function EndColumn()
+    ImGui.EndTable()
+end
+
 function PLAYER_PED_ID()
     return Natives.InvokeInt(0xD80958FC74E988A6)
 end
@@ -111,6 +130,7 @@ end
 
 function CacheGlobalValues()
     CurrentPosition = GetGlobalInt(Globals.Position) + 1
+    Logger.LogInfo(CurrentPosition)
 
     DefaultGuns = {}
     DefaultThrowables = {}
@@ -128,28 +148,27 @@ function CacheGlobalValues()
     end
 end
 
+function FindDefaultLocation()
+    local BeginGlobal = Globals.Positions
+end
 ----------------------- VARIABLES ------------------------
 
 Globals = {}
 
--- i cant find this global's hash in tunable processing, so ill hardcode it for now, its hash may be somewhere else?
-if Cherax.GetEdition() == "EE" then -- Enhanced Globals
-    Globals =
-    {
-        Position = 2652582 + 2706, -- (int/hash func_14()) [x]
-    }
-else -- Legacy Globals
-    Globals =
-    {
-        Position = 2652579 + 2706, -- (int/hash func_14()) [x]
-    }
+-- i cant find this global's hash in tunable processing, so ill hardcode it for now, ~its hash may be somewhere else?~
+-- (int/hash func_14())
+if Cherax.GetEdition() == "EE" then
+    Globals.Position = 2652584 + 2706
+else -- LE
+    Globals.Position = 2652581 + 2706
 end
 
+Globals.Positions = ScriptGlobal.StringToTunable("xm22_gun_van_location_enabled_0")
 Globals.WeaponSlots = ScriptGlobal.StringToTunable("xm22_gun_van_slot_weapon_type_0")
 Globals.ThrowableSlots = ScriptGlobal.StringToTunable("xm22_gun_van_slot_throwable_type_0")
-Globals.WeaponDiscount = ScriptGlobal.StringToTunable("xm22_gun_van_slot_weapon_discount_0")
-Globals.ThrowableDiscount = ScriptGlobal.StringToTunable("xm22_gun_van_slot_throwable_discount_0")
-Globals.ArmourDiscount = ScriptGlobal.StringToTunable("xm22_gun_van_slot_armour_discount_0")
+Globals.WeaponDiscounts = ScriptGlobal.StringToTunable("xm22_gun_van_slot_weapon_discount_0")
+Globals.ThrowableDiscounts = ScriptGlobal.StringToTunable("xm22_gun_van_slot_throwable_discount_0")
+Globals.ArmourDiscounts = ScriptGlobal.StringToTunable("xm22_gun_van_slot_armour_discount_0")
 
 local SelectedSlot = 0
 local SelectedSlot_Throwables = 0
@@ -434,7 +453,8 @@ FeatureMgr.AddFeature(Utils.Joaat("LUA_THROWABLES_CHOOSE_GUNVAN_SLOT"), "1. Choo
 	GUI.AddToast("Step Completed", "Slot #" .. SelectedSlot_Throwables .. " selected, proceed to step #2.", 3000)
 end):SetLimitValues(1, 3):SetIntValue(1)
 
-FeatureMgr.AddFeature(Utils.Joaat("LUA_THROWABLES_MODIFY_GUNVAN_SLOT"), "2. Choose Throwable", eFeatureType.Combo, "Choose what the selected gun van slot will contain, for more control use \"Advanced Options\"", function(Feat)
+-- this feat name has to be empty because for some fuckin reason the name shows up to the right of the dropdown instead of above
+FeatureMgr.AddFeature(Utils.Joaat("LUA_THROWABLES_MODIFY_GUNVAN_SLOT"), "", eFeatureType.Combo, "Choose what the selected gun van slot will contain, for more control use \"Advanced Options\"", function(Feat)
     GUI.AddToast("Step Completed", BuyableThrowableNames[Feat:GetListIndex() + 1] .. " selected, proceed to step #3.", 3000)
 end):SetList(BuyableThrowableNames)
 FeatureMgr.AddFeature(Utils.Joaat("LUA_THROWABLES_MODIFY_GUNVAN_SLOT_CUSTOM"), "2. Choose Throwable", eFeatureType.InputText, "Choose what the selected gun van slot will contain, from one of the throwable ID's found at: https://wiki.rage.mp/index.php?title=Weapons", function()   
@@ -472,19 +492,19 @@ FeatureMgr.AddFeature(Utils.Joaat("LUA_GUNVAN_DISCOUNTS"), "Apply Discounts", eF
     
     -- Weapon discounts
     for Index = 0, 8 do
-        local Address = Globals.WeaponDiscount.Address + (Index * 8)
+        local Address = Globals.WeaponDiscounts.Address + (Index * 8)
         Memory.WriteFloat(Address, DiscountPercent)
     end
 
     -- Throwable discounts
     for Index = 0, 2 do
-        local Address = Globals.ThrowableDiscount.Address + (Index * 8)
+        local Address = Globals.ThrowableDiscounts.Address + (Index * 8)
         Memory.WriteFloat(Address, DiscountPercent)
     end
 
     -- Armour discounts
     for Index = 0, 4 do
-        local Address = Globals.ArmourDiscount.Address + (Index * 8)
+        local Address = Globals.ArmourDiscounts.Address + (Index * 8)
         Memory.WriteFloat(Address, DiscountPercent)
     end
 	GUI.AddToast("Discounts Applied", "Discounts have been applied!", 3000)
@@ -509,7 +529,7 @@ FeatureMgr.AddFeature(Utils.Joaat("LUA_OPTIMAL_GUNVAN_SLOTS"), "Optimal Gun Van 
 	GUI.AddToast("Optimal Weapons Applied", "Better weapons are now in the gun van", 3000)
 end)
 
-FeatureMgr.AddFeature(Utils.Joaat("LUA_TP_GUNVAN"), "Teleport To Gun Van", eFeatureType.Button, "Teleport yourself to wherever the gun van is", function()
+FeatureMgr.AddFeature(Utils.Joaat("LUA_TP_GUNVAN"), "Teleport Me To Gun Van", eFeatureType.Button, "Teleport yourself to wherever the gun van is", function()
     Script.QueueJob(function()
         CurrentPosition = GetGlobalInt(Globals.Position) + 1
         local PlayerPed = PLAYER_PED_ID()
@@ -527,7 +547,7 @@ FeatureMgr.AddFeature(Utils.Joaat("LUA_CHOOSE_ORIGINAL_POSITION"), "Choose Origi
     FeatureMgr.GetFeature(Utils.Joaat("LUA_SET_GUNVAN_POS")):SetIntValue(DefaultPosition)
 end)
 
-FeatureMgr.AddFeature(Utils.Joaat("LUA_EXECUTE_SET_GUNVAN_POS"), "Teleport To Position", eFeatureType.Button, "Moves the gun van to the previously chosen location", function()
+FeatureMgr.AddFeature(Utils.Joaat("LUA_EXECUTE_SET_GUNVAN_POS"), "Teleport Van To Position", eFeatureType.Button, "Moves the gun van to the previously chosen location", function()
     Script.QueueJob(function()
         SetGlobalInt(Globals.Position, CurrentPosition - 1)
         GUI.AddToast("Gun Van Moved", "The Gun Van has been moved.", 3000)
@@ -613,8 +633,7 @@ FeatureMgr.AddFeature(Utils.Joaat("LUA_GUNVAN_MARK_ON_MAP"), "Mark On Map", eFea
 end)
 
 FeatureMgr.AddFeature(Utils.Joaat("LUA_GUNVAN_README"), "Read Me", eFeatureType.Button, "Please note that some weapons cannot be bought from the Gun Van, such as the candy cane or other limited time collectables, also note that the Weapons tab can only contain weapons and not things like grenades. If you experience issues (e.g: this event is inactive) try restarting the script.", function()
-    GUI.AddToast("Read Me", "Please note that some weapons cannot be bought from the Gun Van, such as the candy cane or other limited time collectables, also note that the Weapons tab can only contain weapons and not things like grenades. If you experience issues (e.g: this event is inactive) try restarting the script." .. SelectedSlot, 10000)
-    -- this toast doesnt even fit on the screen, but the description does so its ok, im too lazy to add \n
+    GUI.AddToast("Read Me", "Please note that some weapons cannot be bought from the Gun Van, such as the candy cane or other limited time collectables,\nalso note that the Weapons tab can only contain weapons and not things like grenades.\nIf you experience issues (e.g: this event is inactive) try restarting the script.", 15000)
 end)
 
 --------------------- CLICK GUI RENDERING ---------------------
@@ -637,36 +656,44 @@ local function CreateMenu()
         end)
     end
 
-	if ClickGUI.BeginCustomChildWindow("Weapons") then
-        ClickGUI.RenderFeature(Utils.Joaat("LUA_CHOOSE_GUNVAN_SLOT"))
+    if BeginColumn("Gun Van", 2) then
+        if ClickGUI.BeginCustomChildWindow("Weapons") then
+            ClickGUI.RenderFeature(Utils.Joaat("LUA_CHOOSE_GUNVAN_SLOT"))
 
-        if AdvancedWeaponSelection then
-            ImGui.Text("2. Choose Weapon")
-            ClickGUI.RenderFeature(Utils.Joaat("LUA_MODIFY_GUNVAN_SLOT_CUSTOM"))
-        else
-            ClickGUI.RenderFeature(Utils.Joaat("LUA_MODIFY_GUNVAN_SLOT"))
+            if AdvancedWeaponSelection then
+                ImGui.Text("2. Choose Weapon")
+                ClickGUI.RenderFeature(Utils.Joaat("LUA_MODIFY_GUNVAN_SLOT_CUSTOM"))
+            else
+                ClickGUI.RenderFeature(Utils.Joaat("LUA_MODIFY_GUNVAN_SLOT"))
+            end
+
+            ClickGUI.RenderFeature(Utils.Joaat("LUA_EXECUTE_MODIFY_GUNVAN_SLOT"))
+            ClickGUI.RenderFeature(Utils.Joaat("LUA_SET_TO_CURRENT_WEAPON"))
+            ClickGUI.RenderFeature(Utils.Joaat("LUA_ADVANCED_OPTIONS_WEAPONS"))
+
+            ClickGUI.EndCustomChildWindow()
         end
 
-        ClickGUI.RenderFeature(Utils.Joaat("LUA_EXECUTE_MODIFY_GUNVAN_SLOT"))
-        ClickGUI.RenderFeature(Utils.Joaat("LUA_SET_TO_CURRENT_WEAPON"))
-        ClickGUI.RenderFeature(Utils.Joaat("LUA_ADVANCED_OPTIONS_WEAPONS"))
+        NextColumn()
 
-        ClickGUI.EndCustomChildWindow()
-    end
-    if ClickGUI.BeginCustomChildWindow("Throwables") then
-        ClickGUI.RenderFeature(Utils.Joaat("LUA_THROWABLES_CHOOSE_GUNVAN_SLOT"))
+        if ClickGUI.BeginCustomChildWindow("Throwables") then
+            ClickGUI.RenderFeature(Utils.Joaat("LUA_THROWABLES_CHOOSE_GUNVAN_SLOT"))
 
-        if AdvancedThrowableSelection then
-            ImGui.Text("2. Choose Throwable")
-            ClickGUI.RenderFeature(Utils.Joaat("LUA_THROWABLES_MODIFY_GUNVAN_SLOT_CUSTOM"))
-        else
-            ClickGUI.RenderFeature(Utils.Joaat("LUA_THROWABLES_MODIFY_GUNVAN_SLOT"))
+            if AdvancedThrowableSelection then
+                ImGui.Text("2. Choose Throwable")
+                ClickGUI.RenderFeature(Utils.Joaat("LUA_THROWABLES_MODIFY_GUNVAN_SLOT_CUSTOM"))
+            else
+                ImGui.Text("2. Choose Throwable")
+                ClickGUI.RenderFeature(Utils.Joaat("LUA_THROWABLES_MODIFY_GUNVAN_SLOT"))
+            end
+
+            ClickGUI.RenderFeature(Utils.Joaat("LUA_THROWABLES_EXECUTE_MODIFY_GUNVAN_SLOT"))
+            ClickGUI.RenderFeature(Utils.Joaat("LUA_GUNVAN_THROWABLES_README"))
+            ClickGUI.RenderFeature(Utils.Joaat("LUA_ADVANCED_OPTIONS_THROWABLES"))
+            ClickGUI.EndCustomChildWindow()
         end
 
-        ClickGUI.RenderFeature(Utils.Joaat("LUA_THROWABLES_EXECUTE_MODIFY_GUNVAN_SLOT"))
-        ClickGUI.RenderFeature(Utils.Joaat("LUA_GUNVAN_THROWABLES_README"))
-        ClickGUI.RenderFeature(Utils.Joaat("LUA_ADVANCED_OPTIONS_THROWABLES"))
-        ClickGUI.EndCustomChildWindow()
+        EndColumn()
     end
 
     if ClickGUI.BeginCustomChildWindow("Miscellaneous") then
@@ -678,6 +705,7 @@ local function CreateMenu()
         ImGui.Separator()
         ImGui.Text("Gun Van Location")
         ClickGUI.RenderFeature(Utils.Joaat("LUA_TP_GUNVAN"))
+        ImGui.Text("Move Van:")
         ClickGUI.RenderFeature(Utils.Joaat("LUA_SET_GUNVAN_POS"))
         ClickGUI.RenderFeature(Utils.Joaat("LUA_CHOOSE_ORIGINAL_POSITION"))
         ClickGUI.RenderFeature(Utils.Joaat("LUA_EXECUTE_SET_GUNVAN_POS"))
