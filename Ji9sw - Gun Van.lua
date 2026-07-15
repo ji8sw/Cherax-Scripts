@@ -81,6 +81,18 @@ function GET_ENTITY_MODEL(Entity)
     return Natives.InvokeInt(0x9F47B058362C84B5, Entity)
 end
 
+function GET_ENTITY_COORDS(Entity)
+    return Natives.InvokeV3(0x3FEF770D40960D5A, Entity, true)
+end
+
+function IS_PED_IN_ANY_VEHICLE(Ped, AtEntering)
+    return Natives.InvokeBool(0x997ABD671D25CA0B, AtEntering or true)
+end
+
+function GET_VEHICLE_PED_IS_IN(Ped, AtEntering)
+    return Natives.InvokeInt(0x9A9112A0FE9A4713, AtEntering or true)
+end
+
 function REVERSE_SCRIPTED_VEHICLE_EFFECTS(GunVanHandle) -- Reverses the effects created by the gunvan script when the vehicle is spawned, which stops the player from driving it
     Natives.InvokeInt(0x3910051CCECDB00C, GunVanHandle, false) -- SET_ENTITY_SHOULD_FREEZE_WAITING_ON_COLLISION
     Natives.InvokeInt(0x428CA6DBD1094446, GunVanHandle, false) -- FREEZE_ENTITY_POSITION
@@ -128,9 +140,54 @@ function SET_BLIP_SCALE(Blip, Scale)
     return Natives.InvokeVoid(0xD38744167B2FA257, Blip, Scale)
 end
 
+function GET_ENTITY_FORWARD_VECTOR(Entity)
+    return Natives.InvokeV3(0x0A794A5A57F8DF91, Entity)
+end
+
+function FindPedByModel(ModelName)
+    local Hash = Utils.Joaat(ModelName)
+
+    for Index = 0, PoolMgr.GetCurrentPedCount() do
+        local Ped = PoolMgr.GetPed(Index)
+        if GET_ENTITY_MODEL(Ped) == Hash then
+            return Ped
+        end
+    end
+
+    -- sometimes the PoolMgr fails to return the handle, so we use the rendered pool as a fallback
+
+    for Index, PedPtr in pairs(PoolMgr.GetRenderedPeds()) do 
+        local Ped = GTA.PointerToHandle(PedPtr)
+        if GET_ENTITY_MODEL(Ped) == Hash then
+            return Ped
+        end
+    end
+
+    return 0
+end
+
+function FindVehicleByModel(ModelName)
+    local Hash = Utils.Joaat(ModelName)
+
+    for Index = 0, PoolMgr.GetCurrentVehicleCount() do
+        local Veh = PoolMgr.GetVehicle(Index)
+        if GET_ENTITY_MODEL(Veh) == Hash then
+            return Veh
+        end
+    end
+
+    -- sometimes the PoolMgr fails to return the handle, so we use the rendered pool as a fallback
+
+    for Index, VehPtr in pairs(PoolMgr.GetRenderedVehicles()) do 
+        local Veh = GTA.PointerToHandle(VehPtr)
+        if GET_ENTITY_MODEL(Veh) == Hash then
+            return Veh
+        end
+    end
+end
+
 function CacheGlobalValues()
     CurrentPosition = GetGlobalInt(Globals.Position) + 1
-    Logger.LogInfo(CurrentPosition)
 
     DefaultGuns = {}
     DefaultThrowables = {}
@@ -148,9 +205,6 @@ function CacheGlobalValues()
     end
 end
 
-function FindDefaultLocation()
-    local BeginGlobal = Globals.Positions
-end
 ----------------------- VARIABLES ------------------------
 
 Globals = {}
@@ -440,10 +494,16 @@ FeatureMgr.AddFeature(Utils.Joaat("LUA_SET_TO_CURRENT_WEAPON"), "Set To Current 
     SetWeaponSlot(SelectedSlot, Value)
 
     GUI.AddToast("Applied Weapon To Slot", "Applied current weapon to slot #" .. SelectedSlot, 3000)
+
+    Memory.Free(WeaponHash)
 end)
 
 FeatureMgr.AddFeature(Utils.Joaat("LUA_ADVANCED_OPTIONS_WEAPONS"), "Advanced Options", eFeatureType.Toggle, "Allows you to input custom weapon hashes", function(Feat)
     AdvancedWeaponSelection = Feat:GetBoolValue()
+end)
+
+FeatureMgr.AddFeature(Utils.Joaat("LUA_GUNVAN_WEAPONS_README"), "Read Me", eFeatureType.Button, "Please note that the Weapons tab can only contain weapons like pistols and rifles", function()
+    GUI.AddToast("Read Me", "Please note that the Weapons tab can only contain weapons like pistols and rifles", 10000)
 end)
 
 --------------------- GUN VAN OPTIONS [THROWABLES] ---------------------
@@ -474,12 +534,29 @@ FeatureMgr.AddFeature(Utils.Joaat("LUA_THROWABLES_EXECUTE_MODIFY_GUNVAN_SLOT"), 
     GUI.AddToast("Slot Modified", "This throwable is now in the gun van in slot #" .. SelectedSlot_Throwables .. ".", 3000)
 end)
 
+FeatureMgr.AddFeature(Utils.Joaat("LUA_SET_TO_CURRENT_THROWABLE"), "Set To Current Throwable", eFeatureType.Button, "Set the current selected throwable slot to the current weapon you are holding\nMust be a throwable or it will show as invalid.", function()
+    local WeaponHash = Memory.AllocInt()
+    local HasWeapon = GET_CURRENT_PED_WEAPON(PLAYER_PED_ID(), WeaponHash, true)
+
+    if not HasWeapon then
+        GUI.AddToast("No Weapon", "No Current Weapon.", 3000)
+        return
+    end
+    
+    local Value, Success = Memory.ReadInt(WeaponHash)
+    SetThrowableSlot(SelectedSlot_Throwables, Value)
+
+    GUI.AddToast("Applied Weapon To Slot", "Applied current weapon to slot #" .. SelectedSlot, 3000)
+
+    Memory.Free(WeaponHash)
+end)
+
 FeatureMgr.AddFeature(Utils.Joaat("LUA_ADVANCED_OPTIONS_THROWABLES"), "Advanced Options", eFeatureType.Toggle, "Allows you to input custom throwable hashes", function(Feat)
     AdvancedThrowableSelection = Feat:GetBoolValue()
 end)
 
 FeatureMgr.AddFeature(Utils.Joaat("LUA_GUNVAN_THROWABLES_README"), "Read Me", eFeatureType.Button, "Please note that the Throwables tab can only contain throwables like grenades", function()
-    GUI.AddToast("Read Me", "Please note that the Throwables tab can only contain throwables like grenades" .. SelectedSlot, 10000)
+    GUI.AddToast("Read Me", "Please note that the Throwables tab can only contain throwables like grenades", 10000)
 end)
 
 --------------------- GUN VAN OPTIONS [MISCELLANEOUS] ---------------------
@@ -532,9 +609,28 @@ end)
 FeatureMgr.AddFeature(Utils.Joaat("LUA_TP_GUNVAN"), "Teleport Me To Gun Van", eFeatureType.Button, "Teleport yourself to wherever the gun van is", function()
     Script.QueueJob(function()
         CurrentPosition = GetGlobalInt(Globals.Position) + 1
-        local PlayerPed = PLAYER_PED_ID()
+        local EntityToTP = PLAYER_PED_ID()
+
+        -- if in vehicle, tp that instead
+        if IS_PED_IN_ANY_VEHICLE(EntityToTP, true) then
+            EntityToTP = GET_VEHICLE_PED_IS_IN(EntityToTP, true)
+        end
+
         local Coord = GunVanCoords[CurrentPosition]
-        SET_ENTITY_COORDS(PlayerPed, Coord[1], Coord[2], Coord[3])
+        SET_ENTITY_COORDS(EntityToTP, Coord[1], Coord[2], Coord[3])
+        Script.Yield(1000) -- wait for surroundings to load for the following to work
+
+        local FoundVeh = FindVehicleByModel("Speedo4")
+        if FoundVeh ~= 0 then -- if we can find the gunvan, we should put the player behind the van rather than right on it
+            local ForwardX, ForwardY, ForwardZ = GET_ENTITY_FORWARD_VECTOR(FoundVeh)
+            local VanX, VanY, VanZ = GET_ENTITY_COORDS(FoundVeh)
+            local CurX, CurY, CurZ = GET_ENTITY_COORDS(EntityToTP)
+
+            CurX = CurX - (ForwardX * 3.5)
+            CurY = CurY - (ForwardY * 3.5)
+            CurZ = CurZ - (ForwardZ * 3.5)
+            SET_ENTITY_COORDS(EntityToTP, CurX, CurY, CurZ)
+        end
     end)
 end)
 
@@ -577,46 +673,41 @@ end)
 
 FeatureMgr.AddFeature(Utils.Joaat("LUA_GUNVAN_UNLOCK"), "Unlock Gun Van", eFeatureType.Button, "Unlocks the gun van doors, allowing you to drive it", function()
     Script.QueueJob(function()
-        for Index = 0, PoolMgr.GetCurrentVehicleCount() do 
-            local Veh = PoolMgr.GetVehicle(Index)
-            if GET_ENTITY_MODEL(Veh) == Utils.Joaat("Speedo4") then
-                REVERSE_SCRIPTED_VEHICLE_EFFECTS(Veh)
-            end
+        local FoundVeh = FindVehicleByModel("Speedo4")
+
+        if FoundVeh ~= 0 then
+            REVERSE_SCRIPTED_VEHICLE_EFFECTS(FoundVeh)
+            GUI.AddToast("Success", "The gun van should now be unlocked", 5000)
+        else
+            GUI.AddToast("Failure", "Failed to find the gun van", 5000)
         end
     end)
 end)
 
 FeatureMgr.AddFeature(Utils.Joaat("LUA_GUNVAN_DRIVE"), "Drive Gun Van", eFeatureType.Button, "Does the same as unlock but puts you in the drivers seat too", function()
-    local PlayerPed = PLAYER_PED_ID()
-    
-    Script.QueueJob(function()       
-        for Index = 0, PoolMgr.GetCurrentVehicleCount() do 
-            local Veh = PoolMgr.GetVehicle(Index)
-            if GET_ENTITY_MODEL(Veh) == Utils.Joaat("Speedo4") then
-                REVERSE_SCRIPTED_VEHICLE_EFFECTS(Veh)
-                SET_PED_INTO_VEHICLE(PlayerPed, Veh, -1)
-            end
+    Script.QueueJob(function()
+        local PlayerPed = PLAYER_PED_ID()  
+        local FoundVeh = FindVehicleByModel("Speedo4")
+
+        if FoundVeh ~= 0 then
+            REVERSE_SCRIPTED_VEHICLE_EFFECTS(FoundVeh)
+            SET_PED_INTO_VEHICLE(PlayerPed, FoundVeh, -1)
+            GUI.AddToast("Success", "The gun van should now be unlocked", 5000)
+        else
+            GUI.AddToast("Failure", "Failed to find the gun van", 5000)
         end
     end)
 end)
 
 FeatureMgr.AddFeature(Utils.Joaat("LUA_GUNVAN_SELLER_RESET"), "Seller Shootable", eFeatureType.Button, "Allows the gun van seller to be shootable, allowing you to kill him.", function()
     Script.QueueJob(function()
-        for Index = 0, PoolMgr.GetCurrentPedCount() do
-            local Ped = PoolMgr.GetPed(Index)
-            if GET_ENTITY_MODEL(Ped) == Utils.Joaat("IG_GunVanSeller") then
-                REVERSE_SCRIPTED_PED_EFFECTS(Ped)
-                return
-            end
-        end
+        local FoundPed = FindPedByModel("IG_GunVanSeller")
 
-        -- sometimes the PoolMgr fails to return the ped handle, so we use the rendered peds as a fallback
-
-        for Index, PedPtr in pairs(PoolMgr.GetRenderedPeds()) do 
-            local Ped = GTA.PointerToHandle(PedPtr)
-            if GET_ENTITY_MODEL(Ped) == Utils.Joaat("IG_GunVanSeller") then
-                REVERSE_SCRIPTED_PED_EFFECTS(Ped)
-            end
+        if FoundPed ~= 0 then
+            REVERSE_SCRIPTED_PED_EFFECTS(FoundPed)
+            GUI.AddToast("Success", "The gun van seller should now be able to be shot", 5000)
+        else
+            GUI.AddToast("Failure", "Failed to find the gun van seller", 5000)
         end
     end)
 end)
@@ -669,6 +760,7 @@ local function CreateMenu()
 
             ClickGUI.RenderFeature(Utils.Joaat("LUA_EXECUTE_MODIFY_GUNVAN_SLOT"))
             ClickGUI.RenderFeature(Utils.Joaat("LUA_SET_TO_CURRENT_WEAPON"))
+            ClickGUI.RenderFeature(Utils.Joaat("LUA_GUNVAN_WEAPONS_README"))
             ClickGUI.RenderFeature(Utils.Joaat("LUA_ADVANCED_OPTIONS_WEAPONS"))
 
             ClickGUI.EndCustomChildWindow()
@@ -688,6 +780,7 @@ local function CreateMenu()
             end
 
             ClickGUI.RenderFeature(Utils.Joaat("LUA_THROWABLES_EXECUTE_MODIFY_GUNVAN_SLOT"))
+            ClickGUI.RenderFeature(Utils.Joaat("LUA_SET_TO_CURRENT_THROWABLE"))
             ClickGUI.RenderFeature(Utils.Joaat("LUA_GUNVAN_THROWABLES_README"))
             ClickGUI.RenderFeature(Utils.Joaat("LUA_ADVANCED_OPTIONS_THROWABLES"))
             ClickGUI.EndCustomChildWindow()
@@ -811,6 +904,8 @@ end)
 
 --
 
+GUI.AddToast("Ji9sw - Gun Van", "Welcome to Ji9sw's Gun Van script!", 5000)
+
 --[[ Commits / Credits : 
 
 ji9sw: Original Author, Various Language Translations, Ported from Stand to Cherax
@@ -818,6 +913,7 @@ Global Source: gunclub_shop.c [https://github.com/calamity-inc/GTA-V-Decompiled-
 parci0_0: Updated for game version 1.69-3258
 frog_e123: Original Korean Translation
 Prisuhm: Help with approval and fixing issues, Enhanced globals for 1.72
+WhiteWatermelon: Globals for 1.73
 Bravado: Providing nessessary info to update for Enhanced
 Silent: Buyable weapons list
 
